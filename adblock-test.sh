@@ -14,25 +14,26 @@ NC="\033[0m" # reset color
 # functions
 
 # $1: the URL to test
-# returns the curl exit code for this url
-get_resolve_status() {
-    curl -s -o /dev/null "$1"
-    echo "$?"
-}
-
-# $1: the URL to test
-# returns the http status code for this site
-get_http_status() {
-    curl -s -o /dev/null -w "%{http_code}" "$1"
-}
-
-# $1: the URL to test
-# returns "1" if this url points to 127.0.0.1
-get_is_localhost() {
-    if dig "$1" | grep -q 127.0.0.1; then
+# returns "1" if the URL is blocked by any means
+get_is_blocked() {
+    local url="$1"
+    local digres
+    digres=$(dig "$url")
+    if echo "$digres" | grep -q "127.0.0.1"; then
+        # points to local
         echo 1
+    elif echo "$digres" | grep -q "0.0.0.0"; then
+        # points to non existent
+        echo 1
+    elif echo "$digres" | grep -q "ANSWER: 0"; then
+        # no DNS records
+        echo 1
+    elif [[ $(curl -m 3 -s -o /dev/null -w "%{http_code}" "$1") == 404 ]]; then
+        # points to a 404 server
+        echo 1
+    else
+        echo 0
     fi
-    echo 0
 }
 
 # $1: the percentage to test as integer
@@ -79,10 +80,7 @@ for test in "${tests[@]}"; do
         for (( j = 0; j < urlNum; j++ )); do
             url=$(echo "$urlArr" | jq -r ".[$j]")
             # test this url
-            resolveCode=$(get_resolve_status "$url")
-            statusCode=$(get_http_status "$url")
-            isLocal=$(get_is_localhost "$url")
-            if [[ $resolveCode == 6 ]] || [[ $statusCode == 404 ]] || [[ $isLocal == 1 ]]; then
+            if [[ $(get_is_blocked "$url") == 1 ]]; then
                 # passed
                 echo -e "${GREEN}✓ ${url}${NC}"
                 (( passedSites++ ))
