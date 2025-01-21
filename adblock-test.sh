@@ -79,14 +79,19 @@ for test in "${tests[@]}"; do
         passedSites=0
         for (( j = 0; j < urlNum; j++ )); do
             url=$(echo "$urlArr" | jq -r ".[$j]")
+            tput sc
+            echo -en "${YELLOW}? ${url}${NC}"
+            tput rc
             # test this url
             if [[ $(get_is_blocked "$url") == 1 ]]; then
                 # passed
+                tput el
                 echo -e "${GREEN}✓ ${url}${NC}"
                 (( passedSites++ ))
                 (( passed++ ))
             else
                 # failed
+                tput el
                 echo -e "${RED}❌ ${url}${NC}"
             fi
         done
