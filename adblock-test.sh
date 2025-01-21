@@ -3,6 +3,7 @@
 # file paths
 TESTS_FILE="./enabled-tests.conf"
 DATA_FILE="./site-data.json"
+BLOCKING_METHODS=("localhost" "0.0.0.0" "No DNS")
 
 # colors
 RED="\033[31m" # For errors / warnings
@@ -13,26 +14,45 @@ NC="\033[0m" # reset color
 
 # functions
 
+# $1 the URL
+# overwrite ipList below with a human readable list of IPs for given URL
+ipList=""
+populate_ip_list() {
+    local url="$1"
+    local digOut
+    digOut=$(dig "$url" | tr -s '\n' | grep -v \; | grep -w "IN" | grep -w "A")
+    ipList=""
+    while read -r line; do
+        line=$(echo "$line" | xargs)
+        if [[ $ipList == "" ]]; then
+            ipList="${line##* }"
+        else
+            ipList="${ipList}, ${line##* }"
+        fi
+    done <<< "$digOut"
+}
+
 # $1: the URL to test
-# returns "1" if the URL is blocked by any means
+# returns "0" if the URL isn't blocked by any means, index for method + 1 otherwise
 get_is_blocked() {
     local url="$1"
     local digres
-    digres=$(dig "$url")
+    digres=$(dig -r "$url")
     if echo "$digres" | grep -q "127.0.0.1"; then
         # points to local
         echo 1
     elif echo "$digres" | grep -q "0.0.0.0"; then
         # points to non existent
-        echo 1
-    elif echo "$digres" | grep -q "ANSWER: 0"; then
-        # no DNS records
-        echo 1
-    elif [[ $(curl -m 3 -s -o /dev/null -w "%{http_code}" "$1") == 404 ]]; then
-        # points to a 404 server
-        echo 1
+        echo 2
     else
-        echo 0
+        populate_ip_list "$url"
+        if [[ $ipList == "" ]]; then
+            # failed to resolve. abort here
+            # no DNS records
+            echo 3
+        else # try another way
+            echo 0
+        fi
     fi
 }
 
@@ -83,16 +103,26 @@ for test in "${tests[@]}"; do
             echo -en "${YELLOW}? ${url}${NC}"
             tput rc
             # test this url
-            if [[ $(get_is_blocked "$url") == 1 ]]; then
+            res=$(get_is_blocked "$url")
+            if [[ $res -gt 0 ]]; then
                 # passed
+                (( res-- ))
+                method="${BLOCKING_METHODS[$res]}"
                 tput el
-                echo -e "${GREEN}✓ ${url}${NC}"
+                echo -e "${GREEN}✓ ${url} (${method})${NC}"
                 (( passedSites++ ))
                 (( passed++ ))
             else
                 # failed
+                [[ $res != 3 ]] && populate_ip_list "$url"
+                ips="$ipList"
+                [[ $ips == "" ]] && ips="ERR"
+                ping="❌"
+                if ping -c 1 -W 1 "$url" > /dev/null 2>&1; then
+                    ping="✓"
+                fi
                 tput el
-                echo -e "${RED}❌ ${url}${NC}"
+                echo -e "${RED}❌ ${url} (IP: ${ips} Ping: ${ping})${NC}"
             fi
         done
         sitesPass+=("$passedSites")
