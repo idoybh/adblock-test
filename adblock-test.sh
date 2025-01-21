@@ -5,10 +5,10 @@ TESTS_FILE="./enabled-tests.conf"
 DATA_FILE="./site-data.json"
 
 # colors
-RED="\033[1;31m" # For errors / warnings
-GREEN="\033[1;32m" # For info
-YELLOW="\033[1;33m" # For input requests
-BLUE="\033[1;36m" # For info
+RED="\033[31m" # For errors / warnings
+GREEN="\033[32m" # For info
+YELLOW="\033[33m" # For input requests
+BLUE="\033[36m" # For info
 NC="\033[0m" # reset color
 
 # functions
